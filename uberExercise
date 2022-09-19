@@ -1,0 +1,50 @@
+/*Obtain campaign population*/
+with campaign_population as (
+  select
+    account_id
+    , account_name
+    , sales_rep
+    , account_manager
+  from 
+    salesforce.account_info
+  where
+    campaign_code = 'sales-migration-cloud'
+)
+
+/*Obtain current products beings used currently and 7 days ago to track progress*/
+, booking_pipeline_opp as (
+select
+  acc.*
+  , opp.opportunity_name
+  , opp.opportunity_id
+  , opp.opportunity_status
+  , round(opp.opportunity_line_item_amount/opp.conversion_rate, 2) as converted_opp_line_item_amount
+  , opp.opportuinty_line_item_id
+  , opp.opportunity_line_item_name
+from 
+  campaign_population acc 
+  join 
+  salesforce.opportunity_table opp 
+  on acc.account_id = opp.account_id
+where
+  updated_date = current_date() and
+    updated_date = current_date() - interval 7 day
+)
+
+/*creating some aggregate metrics*/
+select
+  account_id
+  , account_name
+  , sales_rep
+  , account_manager
+  , opportunity_name
+  , opportunity_id
+  , opportunity_status
+  , sum(converted_opp_line_item_amount) as total_opp_amount
+  , count(opportuinty_line_item_id) as num_of_product
+  , sum(case when lower(opportunity_line_item_name) like '%cloud%' then 1 else 0 end) as count_of_cloud_prods
+  , sum(case when lower(opportunity_line_item_name) not like '%cloud%' then 1 else 0 end) as count_of_non_cloud_prods
+from 
+  booking_pipeline_opp
+group by 1,2,3,4,5,6,7
+
